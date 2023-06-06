@@ -1,0 +1,717 @@
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+-- +++ LAST UPDATED: 06/05/2023
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+IF OBJECT_ID(N'tempdb..#JOBDATA') IS NOT NULL BEGIN DROP TABLE #JOBDATA END;
+
+IF OBJECT_ID(N'tempdb..#SVCDATA') IS NOT NULL BEGIN DROP TABLE #SVCDATA END;
+
+IF OBJECT_ID(N'tempdb..#CONTRACTDATA') IS NOT NULL BEGIN DROP TABLE #CONTRACTDATA END;
+
+ 
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+-- ++ JOB DATA
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+IF OBJECT_ID(N'tempdb..#JOBDATA') IS NOT NULL BEGIN DROP TABLE #JOBDATA END;
+
+SELECT RTRIM(job.[WS_Job_Number]) AS 'WS_Job_Number'
+
+               ,RTRIM(job.[Project_Number]) AS 'Project_Number'
+
+               ,RTRIM(job.[RMDNUMWK]) AS 'RMDNUMWK'
+
+   ,RTRIM(job.[DOCNUMBR]) AS 'INVOICE_NBR'
+
+   ,RTRIM(job.[CUSTNMBR]) AS 'CUSTNMBR'
+
+               ,CASE
+
+                               WHEN jc00102.[Divisions] IS NOT NULL AND jc30001.[Divisions] IS NULL THEN jc00102.[Divisions]
+
+                               WHEN jc30001.[Divisions] IS NOT NULL AND jc00102.[Divisions] IS NULL THEN jc30001.[Divisions]
+
+                               WHEN jc30001.[Divisions] IS NOT NULL AND jc00102.[Divisions] IS NOT NULL THEN CONCAT(jc00102.[Divisions],', ',jc30001.[Divisions])
+
+               ELSE 'N/A' END AS 'DIVISION'
+
+               ,CASE
+
+                               WHEN jc00102.[WS_Job_Number] IS NOT NULL AND jc30001.[Project_Number] IS NULL THEN CONCAT('Job Info: ',jc00102.[WS_Job_Number])
+
+                               WHEN jc30001.[Project_Number] IS NOT NULL AND jc00102.[WS_Job_Number] IS NULL THEN CONCAT('Job Info: ',jc30001.[Project_Number])
+
+                               WHEN jc00102.[WS_Job_Number] IS NOT NULL AND jc30001.[Project_Number] IS NOT NULL THEN CONCAT('Job Info: ',jc00102.[WS_Job_Number],', ',jc30001.[Project_Number])
+
+               ELSE 'N/A' END AS 'REFERENCE'
+
+               ,CASE WHEN jc00102.[WS_Job_Number] IS NOT NULL THEN jc00102.[WS_Job_Number] ELSE 'N/A' END AS 'JC00102_JOB_#'
+
+               ,CASE WHEN jc00102.[Divisions] IS NOT NULL THEN jc00102.[Divisions] ELSE 'N/A' END AS 'JC00102_DIVISION'
+
+               ,CASE WHEN jc00102.[Job_Address_Code] IS NOT NULL THEN jc00102.[Job_Address_Code] ELSE 'N/A' END AS 'JC00102_ADRSCODE'
+
+               ,CASE WHEN jc30001.[Project_Number] IS NOT NULL THEN jc30001.[Project_Number] ELSE 'N/A' END AS 'JC30001_PROJECT_#'
+
+               ,CASE WHEN jc30001.[Divisions] IS NOT NULL THEN jc30001.[Divisions] ELSE 'N/A' END AS 'JC30001_DIVISION'
+
+               ,CASE WHEN jc30001.[Job_Address_Code] IS NOT NULL THEN jc30001.[Job_Address_Code] ELSE 'N/A' END AS 'JC30001_ADRSCODE'
+
+               ,CASE WHEN sv00200.[ADRSCODE] IS NOT NULL THEN sv00200.[ADRSCODE] ELSE 'N/A' END AS 'SV00200_ADRSCODE'
+
+               ,CASE WHEN sv00200.[LOCATNNM] IS NOT NULL THEN sv00200.[LOCATNNM] ELSE 'N/A' END AS 'SV00200_LOCATNNM'
+
+INTO #JOBDATA
+
+FROM
+
+(
+
+SELECT jc20501.[WS_Job_Number] AS 'WS_Job_Number'
+
+               ,CASE WHEN RTRIM(jc20501.[Project_Number]) <> '' THEN jc20501.[Project_Number] ELSE 'N/A' END AS 'Project_Number'
+
+   ,RTRIM(jc20501.[RMDNUMWK]) AS 'RMDNUMWK'
+
+   ,RTRIM(jc20501.[DOCNUMBR]) AS 'DOCNUMBR'
+
+   ,RTRIM(jc20501.[CUSTNMBR]) AS 'CUSTNMBR'
+
+               --,jc20501.[RMDTYPAL]
+
+               --,jc20501.[ACCTAMNT]
+
+   --,jc20501.[DOCDATE]
+
+   --,jc20501.[ADRSCODE]
+
+FROM [HMCC].[dbo].[JC20501] jc20501 -- JC_Invoice_OPEN
+
+UNION -- Job Invoices
+
+SELECT 'Not Applicable' AS 'WS_Job_Number'
+
+               ,jc20511.[Project_Number] AS 'Project_Number'
+
+   ,jc20511.[RMDNUMWK] AS 'RMDNUMWK'
+
+   ,jc20511.[DOCNUMBR] AS 'DOCNUMBR'
+
+               ,jc20511.[CUSTNMBR] AS 'CUSTNMBR'
+
+               --,jc20511.[RMDTYPAL]
+
+   --,jc20511.[ACCTAMNT]
+
+   --,jc20511.[DOCDATE]
+
+   --,jc20511.[ADRSCODE]
+
+FROM [HMCC].[dbo].[JC20511] jc20511 -- JC_Invoice_Project_OPEN
+
+) job
+
+-- Join [JC00102] JC_Job_MSTR
+
+LEFT JOIN [HMCC].[dbo].[JC00102] jc00102 ON RTRIM(job.[WS_Job_Number]) = RTRIM(jc00102.[WS_Job_Number])
+
+-- Join [JC3001] JC_Job_MSTR_HIST
+
+LEFT JOIN [HMCC].[dbo].[JC30001] jc30001 ON RTRIM(job.[Project_Number]) = RTRIM(jc30001.[Project_Number])
+
+-- Join [SV00200] SV_Location_MSTR
+
+LEFT JOIN [HMCC].[dbo].[SV00200] sv00200 ON RTRIM(job.[CUSTNMBR]) = RTRIM(sv00200.[CUSTNMBR]) AND RTRIM(jc00102.[Job_Address_Code]) = RTRIM(sv00200.[ADRSCODE])
+
+-- SELECT * FROM #JOBDATA
+
+ 
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+-- ++ SERVICE DATA
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+IF OBJECT_ID(N'tempdb..#SVCDATA') IS NOT NULL BEGIN DROP TABLE #SVCDATA END;
+
+SELECT RTRIM(service.[Call_Invoice_Number]) AS 'INVOICE_NBR'
+
+               ,RTRIM(service.[Service_Call_ID]) AS 'Service_Call_ID'
+
+               ,RTRIM(service.[CUSTNUMBR]) AS 'CUSTNUMBR'
+
+               ,CONCAT('Service Info: ',service.[Service_Call_ID]) AS 'REFERENCE'
+
+               ,CASE WHEN sv00300.[ADRSCODE] IS NOT NULL THEN sv00300.[ADRSCODE] ELSE 'N/A' END AS 'SV00300_ADRSCODE'
+
+               ,CASE WHEN sv00300.[Divisions] IS NOT NULL THEN sv00300.[Divisions] ELSE 'N/A' END AS 'DIVISION'
+
+               ,CASE WHEN sv00200.[ADRSCODE] IS NOT NULL THEN sv00200.[ADRSCODE] ELSE 'N/A' END AS 'SV00200_ADRSCODE'
+
+               ,CASE WHEN sv00200.[LOCATNNM] IS NOT NULL THEN sv00200.[LOCATNNM] ELSE 'N/A' END AS 'SV00200_LOCATNNM'
+
+INTO #SVCDATA
+
+FROM
+
+(
+
+SELECT RTRIM(sv00700.[Call_Invoice_Number]) AS 'Call_Invoice_Number'
+
+               ,RTRIM(sv00700.[Service_Call_ID]) AS 'Service_Call_ID'
+
+               ,RTRIM(sv00700.[CUSTNMBR]) AS 'CUSTNUMBR'
+
+FROM [HMCC].[dbo].[SV00700] sv00700 -- SV_Invoice_MSTR
+
+UNION -- Service Invoices
+
+SELECT RTRIM(sv00701.[Call_Invoice_Number]) AS 'Call_Invoice_Number'
+
+               ,RTRIM(sv00701.[Service_Call_ID]) AS 'Service_Call_ID'
+
+               ,RTRIM(sv00701.[CUSTNMBR]) AS 'CUSTNUMBR'
+
+FROM [HMCC].[dbo].[SV00701] sv00701 -- SV_Invoice_History
+
+) service
+
+-- Join [SV00300] SV_Service_MSTR
+
+LEFT JOIN [HMCC].[dbo].[SV00300] sv00300 ON RTRIM(service.[Service_Call_ID]) = RTRIM(sv00300.[Service_Call_ID])
+
+-- Join [SV00200] SV_Location_MSTR
+
+LEFT JOIN [HMCC].[dbo].[SV00200] sv00200 ON RTRIM(service.[CUSTNUMBR]) = RTRIM(sv00200.[CUSTNMBR])
+
+WHERE RTRIM(sv00200.[ADRSCODE]) = RTRIM(sv00300.[ADRSCODE])
+
+-- SELECT * FROM #SVCDATA
+
+ 
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+-- ++ MAINTENANCE CONTRACT DATA
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+SELECT RTRIM(contract.[CONTRACT_NUMBER]) AS 'CONTRACT_NUMBER'
+
+               ,RTRIM(contract.[CORP_CONTRACT_NUMBER]) AS 'CORP_CONTRACT_NUMBER'
+
+               ,RTRIM(contract.[CUSTNUMBR]) AS 'CUSTNUMBR'
+
+               ,RTRIM(contract.[ADRSCODE]) AS 'ADRSCODE'
+
+               --,CASE WHEN sv00500.[ADRSCODE] IS NOT NULL THEN sv00500.[ADRSCODE] ELSE 'N/A' END AS 'SV00500_ADRSCODE'
+
+               --,CASE WHEN sv00501.[ADRSCODE] IS NOT NULL THEN sv00501.[ADRSCODE] ELSE 'N/A' END AS 'SV00501_ADRSCODE'
+
+               --,CASE WHEN sv00200.[ADRSCODE] IS NOT NULL THEN sv00200.[ADRSCODE] ELSE 'N/A' END AS 'SV00200_ADRSCODE'
+
+               ,RTRIM(contract.[RMDNUMWK]) AS 'INVOICE_NBR'
+
+               ,CASE
+
+                               WHEN sv00500.[Divisions] IS NOT NULL AND sv00501.[Divisions] IS NULL THEN sv00500.[Divisions]
+
+                               WHEN sv00501.[Divisions] IS NOT NULL AND sv00500.[Divisions] IS NULL THEN sv00501.[Divisions]
+
+                               WHEN sv00500.[Divisions] IS NOT NULL AND sv00501.[Divisions] IS NOT NULL THEN CONCAT(sv00500.[Divisions],', ',sv00501.[Divisions])
+
+                               ELSE 'N/A'
+
+               END AS 'DIVISION'
+
+               ,CASE
+
+                               WHEN sv00500.[Corporate_Contract_Nbr] IS NOT NULL AND sv00500.[Corporate_Contract_Nbr] <> '' THEN CONCAT('Maintenance Contract Info: ',sv00500.[Corporate_Contract_Nbr])
+
+                               WHEN sv00501.[Corporate_Contract_Nbr] IS NOT NULL AND sv00501.[Corporate_Contract_Nbr] <> '' THEN CONCAT('Maintenance Contract Info: ',sv00501.[Corporate_Contract_Nbr])
+
+                               WHEN sv00500.[Contract_Number] IS NOT NULL AND sv00500.[Contract_Number] <> '' THEN CONCAT('Maintenance Contract Info: ',sv00500.[Contract_Number])
+
+                               WHEN sv00501.[Contract_Number] IS NOT NULL AND sv00501.[Contract_Number] <> '' THEN CONCAT('Maintenance Contract Info: ',sv00501.[Contract_Number])
+
+                               --WHEN sv00500.[Contract_Number] IS NOT NULL THEN CONCAT('Maintenance Contract Info: ',sv00500.[Contract_Number],' / ',sv00500.[Corporate_Contract_Nbr]) 
+
+                               --WHEN sv00500.[Corporate_Contract_Nbr] IS NOT NULL THEN CONCAT('Maintenance Contract Info: ',sv00500.[Corporate_Contract_Nbr])
+
+                               --WHEN sv00501.[Contract_Number] IS NOT NULL THEN CONCAT('Maintenance Contract Info: ',sv00501.[Contract_Number],' / ',sv00501.[Corporate_Contract_Nbr])
+
+                               --WHEN sv00501.[Corporate_Contract_Nbr] IS NOT NULL THEN CONCAT('Maintenance Contract Info: ',sv00501.[Corporate_Contract_Nbr])
+
+                               ELSE 'N/A'
+
+               END AS 'REFERENCE'
+
+               ,CASE WHEN sv00500.[CUSTNMBR] IS NOT NULL THEN sv00500.[CUSTNMBR] ELSE 'N/A' END AS 'SV00500_CUSTNMBR'
+
+               ,CASE WHEN sv00500.[ADRSCODE] IS NOT NULL THEN sv00500.[ADRSCODE] ELSE 'N/A' END AS 'SV00500_ADRSCODE'
+
+               ,CASE WHEN sv00500.[Contract_Number] IS NOT NULL THEN sv00500.[Contract_Number] ELSE 'N/A' END AS 'SV00500_CONTRACT_NUMBER'
+
+               ,CASE WHEN sv00500.[Corporate_Contract_Nbr] IS NOT NULL THEN sv00500.[Corporate_Contract_Nbr] ELSE 'N/A' END AS 'SV00500_CORP_CONTRACT_NUMBER'
+
+               ,CASE WHEN sv00500.[Divisions] IS NOT NULL THEN sv00500.[Divisions] ELSE 'N/A' END AS 'SV00500_DIVISION'
+
+               ,CASE WHEN sv00501.[CUSTNMBR] IS NOT NULL THEN sv00501.[CUSTNMBR] ELSE 'N/A' END AS 'SV00501_CUSTNMBR'
+
+               ,CASE WHEN sv00501.[ADRSCODE] IS NOT NULL THEN sv00501.[ADRSCODE] ELSE 'N/A' END AS 'SV00501_ADRSCODE'
+
+               ,CASE WHEN sv00501.[Contract_Number] IS NOT NULL THEN sv00501.[Contract_Number] ELSE 'N/A' END AS 'SV00501_CONTRACT_NUMBER'
+
+               ,CASE WHEN sv00501.[Corporate_Contract_Nbr] IS NOT NULL THEN sv00501.[Corporate_Contract_Nbr] ELSE 'N/A' END AS 'SV00501_CORP_CONTRACT_NUMBER'
+
+               ,CASE WHEN sv00501.[Divisions] IS NOT NULL THEN sv00501.[Divisions] ELSE 'N/A' END AS 'SV00501_DIVISION'
+
+               ,CASE WHEN sv00200.[ADRSCODE] IS NOT NULL THEN sv00200.[ADRSCODE] ELSE 'N/A' END AS 'SV00200_ADRSCODE'
+
+               ,CASE WHEN sv00200.[LOCATNNM] IS NOT NULL THEN sv00200.[LOCATNNM] ELSE 'N/A' END AS 'SV00200_LOCATNNM'
+
+INTO #CONTRACTDATA
+
+FROM
+
+(
+
+SELECT RTRIM(sv00510.[CUSTNMBR]) AS 'CUSTNUMBR'
+
+               ,RTRIM(sv00510.[ADRSCODE]) AS 'ADRSCODE'
+
+               ,RTRIM(sv00510.[Contract_Number]) AS 'CONTRACT_NUMBER'
+
+               ,RTRIM(sv00510.[Corporate_Contract_Nbr]) AS 'CORP_CONTRACT_NUMBER'
+
+               ,RTRIM(sv00510.[DOCAMNT]) AS 'DOCAMNT'
+
+               ,RTRIM(sv00510.[RMDNUMWK]) AS 'RMDNUMWK'
+
+FROM [HMCC].[dbo].SV00510 sv00510 -- SV_Contract_Billing_MSTR
+
+WHERE sv00510.[RMDNUMWK] <> '' AND sv00510.[RMDNUMWK] IS NOT NULL
+
+UNION -- UNION Maintenance Contract Invoices
+
+SELECT RTRIM(sv00507.[CUSTNMBR]) AS 'CUSTNUMBR'
+
+               ,RTRIM(sv00507.[ADRSCODE]) AS 'ADRSCODE'
+
+               ,RTRIM(sv00507.[Contract_Number]) AS 'CONTRACT_NUMBER'
+
+               ,RTRIM(sv00507.[Corporate_Contract_Nbr]) AS 'CORP_CONTRACT_NUMBER'
+
+               ,RTRIM(sv00507.[DOCAMNT]) AS 'DOCAMNT'
+
+               ,RTRIM(sv00507.[RMDNUMWK]) AS 'RMDNUMWK'
+
+FROM [HMCC].[dbo].SV00507 sv00507 -- SV_Contract_Billing_HIST
+
+WHERE sv00507.[RMDNUMWK] <> '' AND sv00507.[RMDNUMWK] IS NOT NULL
+
+) contract
+
+-- Join [SV00500] SV_Maint_MSTR
+
+LEFT JOIN [HMCC].[dbo].SV00500 sv00500 ON RTRIM(contract.[CONTRACT_NUMBER]) = RTRIM(sv00500.[Contract_Number])
+
+-- Join [SV00501] SV_Maint_HIST
+
+LEFT JOIN [HMCC].[dbo].SV00501 sv00501 ON RTRIM(contract.[CONTRACT_NUMBER]) = RTRIM(sv00501.[Contract_Number])
+
+-- Join [SV00200] SV_Location_MSTR
+
+LEFT JOIN [HMCC].[dbo].[SV00200] sv00200 ON RTRIM(contract.[CUSTNUMBR]) = RTRIM(sv00200.[CUSTNMBR]) AND RTRIM(contract.[ADRSCODE]) = RTRIM(sv00200.[ADRSCODE])
+
+-- SELECT * FROM #CONTRACTDATA
+
+-- ORDER BY #CONTRACTDATA.[CUSTNUMBR]
+
+ 
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+-- ++ MAIN QUERY
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+DECLARE @AgingDate datetime = GETDATE();
+
+ 
+
+SELECT
+
+               rm20101.[CUSTNMBR]
+
+               ,rm00101.[CUSTNAME]
+
+   ,rm20101.[DOCNUMBR] AS 'TRX_NBR'
+
+   ,rm20101.[RMDTYPAL] AS 'AR_TRX_TYPE (RMDTYPAL)'
+
+               ,CASE 
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) IN (1,5) THEN 'Invoice/Open AR'
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) = 3 THEN 'Debit Memo'
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) = 7 THEN 'Credit Memo/Unapplied Credit'
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) = 9 THEN 'Payment/Unapplied Cash'
+
+                               ELSE 'Not specified'
+
+               END TRX_TYPE
+
+               ,CASE 
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) = 0 THEN 'Reserved'
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) = 1 THEN 'Invoice/Open AR'
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) = 2 THEN 'Scheduled Pmt'
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) = 3 THEN 'Debit Memo'
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) = 4 THEN 'Finance Charge'
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) = 5 THEN 'Service Repair'
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) = 6 THEN 'Warranty'
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) = 7 THEN 'Credit Memo/Unapplied Credit'
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) = 8 THEN 'Return'
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) = 9 THEN 'Payment/Unapplied Cash'
+
+                               ELSE 'Not specified'
+
+               END DOCTYPE
+
+               ,rm20101.[PYMTRMID]
+
+               /*,CASE 
+
+                               WHEN rm20101.[PYMTRMID] = 'N0' THEN 'Due Upon Receipt'
+
+                               WHEN rm20101.[PYMTRMID] = 'N10' THEN 'Net 10'
+
+                               WHEN rm20101.[PYMTRMID] = 'N15' THEN 'Net 15'
+
+                               WHEN rm20101.[PYMTRMID] = 'N30' THEN 'Net 30'
+
+                               WHEN rm20101.[PYMTRMID] = 'N45' THEN 'Net 45'
+
+                               WHEN rm20101.[PYMTRMID] = 'N60' THEN 'Net 60'
+
+                               WHEN rm20101.[PYMTRMID] = 'N65' THEN 'Net 65'
+
+                               WHEN rm20101.[PYMTRMID] = 'N90' THEN 'Net 90'
+
+                               WHEN rm20101.[PYMTRMID] = '2% 10-Net 30' THEN '2% 10-Net 30'
+
+                               ELSE 'Not specified'
+
+               END PAYMENT_TERMS  */
+
+               ,CAST(rm20101.[DUEDATE] AS date) AS DUEDATE
+
+               ,CAST(rm20101.[DOCDATE] AS date) AS 'TRX_DATE (DOCDATE)'
+
+   ,CASE 
+
+                               WHEN (@AgingDate - rm20101.[DOCDATE] <= 30)  THEN '0-30 Days'
+
+                               WHEN ((@AgingDate - rm20101.[DOCDATE] > 30)  AND (@AgingDate - rm20101.[DOCDATE] <=60))  THEN '31-60 Days'
+
+                               WHEN ((@AgingDate - rm20101.[DOCDATE] > 60)  AND (@AgingDate - rm20101.[DOCDATE] <=90))  THEN '61-90 Days'
+
+                               WHEN ((@AgingDate - rm20101.[DOCDATE] > 90)  AND (@AgingDate - rm20101.[DOCDATE] <=120)) THEN '91-120 Days'
+
+                               WHEN ((@AgingDate - rm20101.[DOCDATE] > 120) AND (@AgingDate - rm20101.[DOCDATE] <=150)) THEN '121-150 Days'
+
+                               ELSE '150 Days +'
+
+               END AGING_CATEGORY
+
+               --,CAST(rm20101.[POSTDATE] AS DATE) AS POSTDATE
+
+   ,CAST(rm20101.[GLPOSTDT] AS DATE) AS GLPOSTDT
+
+   ,CAST(rm20101.[ORTRXAMT] AS decimal(18,2)) AS ORTRXAMT
+
+               ,CAST(rm20101.[CURTRXAM] AS decimal(18,2)) AS CURTRXAM
+
+   -- Create positive or negative transaction amount based on transaction type: 1=Invoice (Job), 3= Unapplied Debit Memo, 5=Invoice (Service & Contract), 7=Unapplied Credit Memo, 9=Unapplied Cash
+
+               ,CASE 
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) IN (1,3,5) THEN CAST(rm20101.[CURTRXAM] AS decimal(18,2))
+
+                               ELSE '0.00'
+
+               END 'POSITIVE'
+
+               ,CASE 
+
+                               WHEN RTRIM(rm20101.[RMDTYPAL]) IN (7,9) THEN CAST((rm20101.[CURTRXAM] * -1) AS decimal(18,2))
+
+                               ELSE '0.00'
+
+               END 'NEGATIVE'
+
+   ,RTRIM(rm20101.[TRXDSCRN]) AS TRXDSCRN
+
+               ,RTRIM(b3950001.[BSSI_Facility_ID]) AS 'COMPANY #'
+
+               -- Determining 'COMPANY' based on [BSSI_Facility_ID]
+
+               ,CASE 
+
+                               WHEN RTRIM(b3950001.[BSSI_Facility_ID]) = '01' THEN 'Harris St Paul, Inc.'
+
+                               WHEN RTRIM(b3950001.[BSSI_Facility_ID]) = '07' THEN 'Midwest Fabrication & Supply, LLC'
+
+                               WHEN RTRIM(b3950001.[BSSI_Facility_ID]) = '08' THEN 'Harris Rochester, Inc.'
+
+                               WHEN RTRIM(b3950001.[BSSI_Facility_ID]) = '09' THEN 'Harris Arizona, LLC'
+
+                               WHEN RTRIM(b3950001.[BSSI_Facility_ID]) = '25' THEN 'Harris Mountain West, LLC'
+
+                               WHEN RTRIM(b3950001.[BSSI_Facility_ID]) = '26' THEN 'Harris California, Inc.'
+
+                               WHEN RTRIM(b3950001.[BSSI_Facility_ID]) = '30' THEN 'Harris Mid-Atlantic, LLC'
+
+                               WHEN RTRIM(b3950001.[BSSI_Facility_ID]) = '40' THEN 'Harris Las Vegas, LLC'
+
+                               WHEN RTRIM(b3950001.[BSSI_Facility_ID]) = '45' THEN 'Harris Pacific Northwest, LLC'
+
+                               WHEN RTRIM(b3950001.[BSSI_Facility_ID]) = '49' THEN 'Harris Bay Area, LLC'
+
+                               WHEN RTRIM(b3950001.[BSSI_Facility_ID]) = '91' THEN 'OneHarris, Inc.'
+
+                               WHEN RTRIM(b3950001.[BSSI_Facility_ID]) = '92' THEN 'Harris Real Estate'
+
+                               WHEN RTRIM(b3950001.[BSSI_Facility_ID]) = '93' THEN 'Midwest Fabrication Real Estate'
+
+                               ELSE 'Not specified'
+
+               END 'COMPANY NAME'
+
+               ,CASE
+
+                               WHEN jobdata.[INVOICE_NBR] IS NOT NULL THEN jobdata.[DIVISION]
+
+                               WHEN svcdata.[INVOICE_NBR] IS NOT NULL THEN svcdata.[DIVISION]
+
+                               WHEN contractdata.[INVOICE_NBR] IS NOT NULL THEN contractdata.[DIVISION]
+
+                               ELSE 'Not specified'
+
+               END AS 'TRX_DIVISION'
+
+               ,CASE
+
+                               WHEN jobdata.[INVOICE_NBR] IS NOT NULL THEN 'Job'
+
+                               WHEN svcdata.[INVOICE_NBR] IS NOT NULL THEN 'Service Call'
+
+                               WHEN contractdata.[INVOICE_NBR] IS NOT NULL THEN 'Maintenance Contract'
+
+                               ELSE 'Not specified'
+
+               END AS 'INV_TYPE'
+
+               ,CASE
+
+                               WHEN jobdata.[INVOICE_NBR] IS NOT NULL THEN jobdata.[REFERENCE]
+
+                               WHEN svcdata.[INVOICE_NBR] IS NOT NULL THEN svcdata.[REFERENCE]
+
+                               WHEN contractdata.[INVOICE_NBR] IS NOT NULL THEN contractdata.[REFERENCE]
+
+                               ELSE 'Not specified'
+
+               END AS 'TRX_REF'
+
+               ,CASE
+
+                               WHEN jobdata.[INVOICE_NBR] IS NOT NULL THEN jobdata.[SV00200_ADRSCODE]
+
+                               WHEN svcdata.[INVOICE_NBR] IS NOT NULL THEN svcdata.[SV00200_ADRSCODE]
+
+                               WHEN contractdata.[INVOICE_NBR] IS NOT NULL THEN contractdata.[SV00200_ADRSCODE]
+
+                               ELSE 'Not specified'
+
+               END AS 'TRX_ADR_CODE'
+
+               ,CASE
+
+                               WHEN jobdata.[INVOICE_NBR] IS NOT NULL THEN jobdata.[SV00200_LOCATNNM]
+
+                               WHEN svcdata.[INVOICE_NBR] IS NOT NULL THEN svcdata.[SV00200_LOCATNNM]
+
+                               WHEN contractdata.[INVOICE_NBR] IS NOT NULL THEN contractdata.[SV00200_LOCATNNM]
+
+                               ELSE 'Not specified'
+
+               END AS 'TRX_LOCATION'
+
+               -- Job/Project Details
+
+               ,CASE WHEN jobdata.[CUSTNMBR] IS NOT NULL THEN jobdata.[CUSTNMBR] ELSE 'N/A' END AS 'JOB_CUSTNMBR'
+
+               ,CASE WHEN jobdata.[INVOICE_NBR] IS NOT NULL THEN jobdata.[INVOICE_NBR] ELSE 'N/A' END AS 'JOB_INVOICE_NBR'
+
+               ,CASE WHEN jobdata.[JC00102_JOB_#] <> 'N/A' OR jobdata.[JC00102_JOB_#] IS NOT NULL THEN jobdata.[JC00102_JOB_#]
+
+                               ELSE (CASE WHEN jobdata.[JC30001_PROJECT_#] IS NOT NULL THEN jobdata.[JC30001_PROJECT_#] ELSE 'N/A' END) END AS 'JOB_NUMBER'
+
+               ,CASE WHEN jobdata.[JC00102_JOB_#] <> 'N/A' OR jobdata.[JC00102_JOB_#] IS NOT NULL THEN jobdata.[JC00102_DIVISION]
+
+                               ELSE (CASE WHEN jobdata.[JC30001_DIVISION] IS NOT NULL THEN jobdata.[JC30001_DIVISION] ELSE 'N/A' END) END AS 'JOB_DIVISION'
+
+               ,CASE WHEN jobdata.[SV00200_ADRSCODE] IS NOT NULL THEN jobdata.[SV00200_ADRSCODE] ELSE 'N/A' END AS 'JOB_ADRSCODE'
+
+               ,CASE WHEN jobdata.[SV00200_LOCATNNM] IS NOT NULL THEN jobdata.[SV00200_LOCATNNM] ELSE 'N/A' END AS 'JOB_LOCATNNM'
+
+               -- Service Call Details
+
+               ,CASE WHEN svcdata.[CUSTNUMBR] IS NOT NULL THEN svcdata.[CUSTNUMBR] ELSE 'N/A' END AS 'SVC_CUSTNMBR'
+
+               ,CASE WHEN svcdata.[INVOICE_NBR] IS NOT NULL THEN svcdata.[INVOICE_NBR] ELSE 'N/A' END AS 'SVC_CALL_INV_NBR'
+
+               ,CASE WHEN svcdata.[Service_Call_ID] IS NOT NULL THEN svcdata.[Service_Call_ID] ELSE 'N/A' END AS 'SVC_CALL_ID'
+
+               ,CASE WHEN svcdata.[DIVISION] IS NOT NULL THEN svcdata.[DIVISION] ELSE 'N/A' END AS'SVC_DIVISION'
+
+               ,CASE WHEN svcdata.[SV00200_ADRSCODE] IS NOT NULL THEN svcdata.[SV00200_ADRSCODE] ELSE 'N/A' END AS 'SVC_ADRSCODE'
+
+               ,CASE WHEN svcdata.[SV00200_LOCATNNM] IS NOT NULL THEN svcdata.[SV00200_LOCATNNM] ELSE 'N/A' END AS 'SVC_LOCATNNM'
+
+               -- Maintenance Contract Details
+
+               ,CASE WHEN contractdata.[CUSTNUMBR] IS NOT NULL THEN contractdata.[CUSTNUMBR] ELSE 'N/A' END AS 'CONTRACT_CUSTNMBR'
+
+               ,CASE WHEN contractdata.[CONTRACT_NUMBER] IS NOT NULL THEN contractdata.[CONTRACT_NUMBER] ELSE 'N/A' END AS 'CONTRACT_NBR'
+
+               --,CASE WHEN contractdata.[Service_Call_ID] IS NOT NULL THEN contractdata.[Service_Call_ID] ELSE 'N/A' END AS 'SVC_CALL_ID'
+
+               ,CASE WHEN contractdata.[SV00500_DIVISION] IS NOT NULL THEN contractdata.[SV00500_DIVISION] ELSE
+
+                               (CASE WHEN contractdata.[SV00501_DIVISION] IS NOT NULL THEN contractdata.[SV00501_DIVISION] ELSE'N/A' END) END AS'CONTRACT_DIVISION'
+
+               ,CASE WHEN contractdata.[SV00200_ADRSCODE] IS NOT NULL THEN contractdata.[SV00200_ADRSCODE] ELSE 'N/A' END AS 'CONTRACT_ADRSCODE'
+
+               ,CASE WHEN contractdata.[SV00200_LOCATNNM] IS NOT NULL THEN contractdata.[SV00200_LOCATNNM] ELSE 'N/A' END AS 'CONTRACT_LOCATNNM'
+
+FROM
+
+               [HMCC].[dbo].[RM20101] rm20101 -- RM Open File
+
+               -- Joining Customer Master table [RM00101] to fetch [CUSTNAME]
+
+               INNER JOIN [HMCC].[dbo].[RM00101] rm00101 ON RTRIM(rm20101.[CUSTNMBR]) = RTRIM(rm00101.[CUSTNMBR])
+
+               -- Joining MEM table [B3950001] to fetch [BSSI_Facility_ID] aka 'COMPANY ID' 
+
+               INNER JOIN [HMCC].[dbo].[B3950001] b3950001 ON RTRIM(rm20101.[CUSTNMBR]) = RTRIM(b3950001.[CUSTNMBR]) AND RTRIM(rm20101.[DOCNUMBR]) = RTRIM(b3950001.[DOCNUMBR])
+
+               -- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+               -- Joining Job/Project Data
+
+               LEFT JOIN #JOBDATA jobdata ON RTRIM(rm20101.[CUSTNMBR]) = RTRIM(jobdata.[CUSTNMBR]) AND RTRIM(rm20101.[DOCNUMBR]) = RTRIM(jobdata.[INVOICE_NBR])
+
+               -- Joining Service Data
+
+               LEFT JOIN #SVCDATA svcdata ON RTRIM(rm20101.[CUSTNMBR]) = RTRIM(svcdata.[CUSTNUMBR]) AND RTRIM(rm20101.[DOCNUMBR]) = RTRIM(svcdata.[INVOICE_NBR])
+
+               -- Joining Service Data
+
+               LEFT JOIN #CONTRACTDATA contractdata ON RTRIM(rm20101.[CUSTNMBR]) = RTRIM(contractdata.[CUSTNUMBR]) AND RTRIM(rm20101.[DOCNUMBR]) = RTRIM(contractdata.[INVOICE_NBR])
+
+WHERE
+
+               rm20101.[CURTRXAM] > 0
+
+               AND rm20101.[RMDTYPAL] IN (1,3,5,7,9) -- 1=Invoice (Job), 3= Unapplied Debit Memo, 5=Invoice (Service & Contract), 7=Unapplied Credit Memo, 9=Unapplied Cash
+
+               ORDER BY rm20101.[CUSTNMBR]
+
+-- AND RTRIM(rm20101.[CUSTNMBR]) = '10002347'
+
+-- AND rm20101.[DOCNUMBR] = 'JC3650'
+
+-- AND rm20101.[DOCNUMBR] LIKE 'SRV%'
+
+-- AND RTRIM(rm20101.[DOCNUMBR]) = 'SRVCE000000022273'
+
+-- ORDER BY rm20101.[DOCNUMBR]
+
+-- Clean-up temp tables
+
+IF OBJECT_ID(N'tempdb..#JOBDATA') IS NOT NULL BEGIN DROP TABLE #JOBDATA END;
+
+IF OBJECT_ID(N'tempdb..#SVCDATA') IS NOT NULL BEGIN DROP TABLE #SVCDATA END;
+
+IF OBJECT_ID(N'tempdb..#CONTRACTDATA') IS NOT NULL BEGIN DROP TABLE #CONTRACTDATA END;
+
+ 
+
+/*
+
+LINK WORK LOCATION VIA SV00200 on CUSTNUMBER AND ADRCODE
+
+ 
+
+JC00102 - JC_Job_MSTR
+
+JC30001 - JC_Job_MSTR_HIST
+
+SV00300 - SV_Service_MSTR
+
+SV00301 - SV_Service_Appointments_MSTR
+
+SV00500 - SV_Maint_MSTR
+
+SV00501 - SV_Maint_HIST
+
+ 
+
+SV00200 - SV_Location_MSTR
+
+ 
+
+Job/Project:
+
+JC20501 - JC_Invoice_OPEN
+
+JC20511 - JC_Invoice_Project_OPEN
+
+ 
+
+Service Call:
+
+SV00700 - SV_Invoice_MSTR
+
+SV00701 - SV_Invoice_History
+
+ 
+
+Maintenance:
+
+SV00510 - SV_Contract_Billing_MSTR (contract number)
+
+SV00507 - SV_Contract_Billing_HIST (value in corp contract, IF null then contract number)
+
+*/
